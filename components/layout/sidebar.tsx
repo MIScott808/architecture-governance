@@ -6,11 +6,11 @@ import {
   LayoutDashboard, Layers, Map, AlertTriangle, ParkingCircle,
   BookOpen, RefreshCw, CheckSquare, Settings, Shield, ChevronLeft, ChevronRight,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Runway Health', icon: LayoutDashboard },
-  { href: '/artifacts', label: 'Artifacts', icon: Layers },
+  { href: '/artifacts', label: 'Artifacts', icon: Layers, badgeKey: 'validation' as const },
   { href: '/capabilities', label: 'Capabilities', icon: Map },
   { href: '/conflicts', label: 'Conflicts', icon: AlertTriangle },
   { href: '/parking-lot', label: 'Parking Lot', icon: ParkingCircle },
@@ -23,6 +23,22 @@ const NAV_ITEMS = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [validationCount, setValidationCount] = useState(0);
+
+  useEffect(() => {
+    async function fetchCount() {
+      try {
+        const res = await fetch('/api/artifacts/validation-queue');
+        const data = await res.json();
+        setValidationCount(data.count || 0);
+      } catch {
+        // silently fail
+      }
+    }
+    fetchCount();
+    const interval = setInterval(fetchCount, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <aside
@@ -47,6 +63,7 @@ export default function Sidebar() {
       <nav className="flex-1 px-2 py-4 space-y-1 overflow-y-auto">
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/');
+          const badge = item.badgeKey === 'validation' ? validationCount : 0;
           return (
             <Link
               key={item.href}
@@ -59,7 +76,19 @@ export default function Sidebar() {
               }`}
             >
               <item.icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && <span>{item.label}</span>}
+              {!collapsed && (
+                <>
+                  <span className="flex-1">{item.label}</span>
+                  {badge > 0 && (
+                    <span className="px-1.5 py-0.5 bg-amber-500 text-white text-xs rounded-full font-medium min-w-[20px] text-center">
+                      {badge}
+                    </span>
+                  )}
+                </>
+              )}
+              {collapsed && badge > 0 && (
+                <span className="absolute right-1 top-0.5 w-2 h-2 bg-amber-500 rounded-full" />
+              )}
             </Link>
           );
         })}

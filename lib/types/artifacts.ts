@@ -105,3 +105,34 @@ export function dbTagToTag(db: Record<string, unknown>): DomainTag {
     createdAt: db.created_at as string,
   };
 }
+
+export function dbPrincipleToPrinciple(db: Record<string, unknown>): ArchitecturePrinciple {
+  return {
+    id: db.id as string,
+    userId: db.user_id as string,
+    principleName: db.principle_name as string,
+    rationale: db.rationale as string | undefined,
+    implications: db.implications as string | undefined,
+    domain: db.domain as ArchitectureDomain | 'cross_cutting',
+    priority: db.priority as number,
+    status: db.status as 'active' | 'deprecated' | 'draft',
+    createdAt: db.created_at as string,
+    updatedAt: db.updated_at as string,
+  };
+}
+
+export function dbComplianceToPrincipleCompliance(db: Record<string, unknown>): PrincipleCompliance {
+  return {
+    id: db.id as string,
+    artifactId: db.artifact_id as string,
+    principleId: db.principle_id as string,
+    complianceStatus: db.compliance_status as PrincipleCompliance['complianceStatus'],
+    exceptionReason: db.exception_reason as string | undefined,
+    exceptionExpiry: db.exception_expiry as string | undefined,
+    assessedBy: db.assessed_by as string | undefined,
+    assessedAt: db.assessed_at as string,
+    principle: db.architecture_principles
+      ? dbPrincipleToPrinciple(db.architecture_principles as Record<string, unknown>)
+      : undefined,
+  };
+}
