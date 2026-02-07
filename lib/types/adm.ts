@@ -23,7 +23,7 @@ export const ADM_PHASE_LABELS: Record<ADMPhase, string> = {
 
 export interface ADMCycle {
   id: string;
-  orgId: string;
+  userId: string;
   cycleName: string;
   cycleNumber: number;
   startedAt: string;
@@ -38,7 +38,7 @@ export interface ADMCycle {
 export function dbCycleToAdmCycle(db: Record<string, unknown>): ADMCycle {
   return {
     id: db.id as string,
-    orgId: db.org_id as string,
+    userId: db.user_id as string,
     cycleName: db.cycle_name as string,
     cycleNumber: db.cycle_number as number,
     startedAt: db.started_at as string,

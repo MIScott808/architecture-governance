@@ -7,7 +7,7 @@ export type ResolutionStatus = 'open' | 'under_review' | 'resolved' |
 
 export interface ArchitectureConflict {
   id: string;
-  orgId: string;
+  userId: string;
   conflictType: ConflictType;
   severity: Severity;
   artifactAId: string;
@@ -27,7 +27,7 @@ export interface ArchitectureConflict {
 export function dbConflictToConflict(db: Record<string, unknown>): ArchitectureConflict {
   return {
     id: db.id as string,
-    orgId: db.org_id as string,
+    userId: db.user_id as string,
     conflictType: db.conflict_type as ConflictType,
     severity: db.severity as Severity,
     artifactAId: db.artifact_a_id as string,

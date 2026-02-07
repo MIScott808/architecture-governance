@@ -5,7 +5,7 @@ export type ParkingStatus = 'parked' | 'under_review' | 'reactivated' | 'cancell
 
 export interface ParkingLotItem {
   id: string;
-  orgId: string;
+  userId: string;
   artifactId?: string;
   itemType: 'requirement' | 'initiative' | 'program' | 'capability_gap';
   itemName: string;
@@ -31,7 +31,7 @@ export interface ParkingLotItem {
 export function dbParkingToParking(db: Record<string, unknown>): ParkingLotItem {
   return {
     id: db.id as string,
-    orgId: db.org_id as string,
+    userId: db.user_id as string,
     artifactId: db.artifact_id as string | undefined,
     itemType: db.item_type as ParkingLotItem['itemType'],
     itemName: db.item_name as string,

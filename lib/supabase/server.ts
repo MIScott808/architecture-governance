@@ -8,12 +8,6 @@ export async function createServerSupabase() {
   return createClient(supabaseUrl, supabaseServiceKey);
 }
 
-export async function getOrgId(): Promise<string> {
-  const { orgId } = await auth();
-  if (!orgId) throw new Error('No organization selected');
-  return orgId;
-}
-
 export async function getUserId(): Promise<string> {
   const { userId } = await auth();
   if (!userId) throw new Error('Not authenticated');

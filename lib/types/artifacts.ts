@@ -6,7 +6,7 @@ export type TagSource = 'auto' | 'human' | 'ai_suggested' | 'inherited';
 
 export interface ArchitectureArtifact {
   id: string;
-  orgId: string;
+  userId: string;
   sourceModule: SourceModule;
   sourceEntityType: string;
   sourceEntityId: string;
@@ -55,7 +55,7 @@ export interface PrincipleCompliance {
 
 export interface ArchitecturePrinciple {
   id: string;
-  orgId: string;
+  userId: string;
   principleName: string;
   rationale?: string;
   implications?: string;
@@ -70,7 +70,7 @@ export interface ArchitecturePrinciple {
 export function dbArtifactToArtifact(db: Record<string, unknown>): ArchitectureArtifact {
   return {
     id: db.id as string,
-    orgId: db.org_id as string,
+    userId: db.user_id as string,
     sourceModule: db.source_module as SourceModule,
     sourceEntityType: db.source_entity_type as string,
     sourceEntityId: db.source_entity_id as string,

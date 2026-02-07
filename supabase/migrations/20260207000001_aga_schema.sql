@@ -1,9 +1,10 @@
--- Migration: 001_aga_schema.sql
+-- Migration: AGA Schema
 -- Architecture Governance Application (AGA) - Module 6
+-- Uses user_id TEXT for data isolation (matches mana-platform pattern)
 
-CREATE TABLE adm_cycles (
+CREATE TABLE IF NOT EXISTS adm_cycles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id) NOT NULL,
+  user_id TEXT NOT NULL,
   cycle_name TEXT NOT NULL,
   cycle_number INTEGER NOT NULL,
   started_at TIMESTAMPTZ DEFAULT NOW(),
@@ -21,9 +22,9 @@ CREATE TABLE adm_cycles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE architecture_artifacts (
+CREATE TABLE IF NOT EXISTS architecture_artifacts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id) NOT NULL,
+  user_id TEXT NOT NULL,
   source_module TEXT NOT NULL CHECK (source_module IN (
     'strategic_compass','initiative_planner','voice_of_customer',
     'requirements_manager','project_mgmt')),
@@ -44,10 +45,10 @@ CREATE TABLE architecture_artifacts (
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(org_id, source_module, source_entity_type, source_entity_id)
+  UNIQUE(user_id, source_module, source_entity_type, source_entity_id)
 );
 
-CREATE TABLE architecture_domain_tags (
+CREATE TABLE IF NOT EXISTS architecture_domain_tags (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   artifact_id UUID REFERENCES architecture_artifacts(id) ON DELETE CASCADE,
   domain TEXT NOT NULL CHECK (domain IN ('business','information','technology')),
@@ -61,9 +62,9 @@ CREATE TABLE architecture_domain_tags (
   UNIQUE(artifact_id, domain, sub_domain)
 );
 
-CREATE TABLE capability_map (
+CREATE TABLE IF NOT EXISTS capability_map (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id) NOT NULL,
+  user_id TEXT NOT NULL,
   pcf_id TEXT NOT NULL,
   pcf_name TEXT NOT NULL,
   capability_name TEXT NOT NULL,
@@ -77,12 +78,12 @@ CREATE TABLE capability_map (
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(org_id, pcf_id)
+  UNIQUE(user_id, pcf_id)
 );
 
-CREATE TABLE architecture_principles (
+CREATE TABLE IF NOT EXISTS architecture_principles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id) NOT NULL,
+  user_id TEXT NOT NULL,
   principle_name TEXT NOT NULL,
   rationale TEXT,
   implications TEXT,
@@ -93,7 +94,7 @@ CREATE TABLE architecture_principles (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE principle_compliance (
+CREATE TABLE IF NOT EXISTS principle_compliance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   artifact_id UUID REFERENCES architecture_artifacts(id) ON DELETE CASCADE,
   principle_id UUID REFERENCES architecture_principles(id),
@@ -106,9 +107,9 @@ CREATE TABLE principle_compliance (
   UNIQUE(artifact_id, principle_id)
 );
 
-CREATE TABLE parking_lot (
+CREATE TABLE IF NOT EXISTS parking_lot (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id) NOT NULL,
+  user_id TEXT NOT NULL,
   artifact_id UUID REFERENCES architecture_artifacts(id),
   item_type TEXT NOT NULL CHECK (item_type IN ('requirement','initiative','program','capability_gap')),
   item_name TEXT NOT NULL,
@@ -133,9 +134,9 @@ CREATE TABLE parking_lot (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE architecture_conflicts (
+CREATE TABLE IF NOT EXISTS architecture_conflicts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id) NOT NULL,
+  user_id TEXT NOT NULL,
   conflict_type TEXT NOT NULL CHECK (conflict_type IN (
     'capability_overlap','principle_violation','resource_contention',
     'data_ownership','integration_conflict','timeline_conflict',
@@ -156,9 +157,9 @@ CREATE TABLE architecture_conflicts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE architecture_states (
+CREATE TABLE IF NOT EXISTS architecture_states (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  org_id UUID REFERENCES organizations(id) NOT NULL,
+  user_id TEXT NOT NULL,
   adm_cycle_id UUID REFERENCES adm_cycles(id),
   state_type TEXT NOT NULL CHECK (state_type IN ('baseline','target','transitional')),
   domain TEXT NOT NULL CHECK (domain IN ('business','information','technology')),
@@ -169,7 +170,7 @@ CREATE TABLE architecture_states (
   created_by TEXT
 );
 
-CREATE TABLE requirement_gap_links (
+CREATE TABLE IF NOT EXISTS requirement_gap_links (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   requirement_artifact_id UUID REFERENCES architecture_artifacts(id),
   gap_artifact_id UUID REFERENCES architecture_artifacts(id),
@@ -192,45 +193,24 @@ ALTER TABLE architecture_conflicts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE architecture_states ENABLE ROW LEVEL SECURITY;
 ALTER TABLE requirement_gap_links ENABLE ROW LEVEL SECURITY;
 
--- Org isolation policies
-DO $$
-DECLARE tbl TEXT;
-BEGIN
-  FOR tbl IN SELECT unnest(ARRAY[
-    'adm_cycles','architecture_artifacts','capability_map',
-    'architecture_principles','parking_lot','architecture_conflicts',
-    'architecture_states'
-  ]) LOOP
-    EXECUTE format('CREATE POLICY org_isolation ON %I FOR ALL USING (
-      org_id IN (SELECT org_id FROM org_members WHERE user_id = auth.uid())
-    )', tbl);
-  END LOOP;
-END $$;
+-- RLS Policies (app-level filtering via user_id, matching mana-platform pattern)
+CREATE POLICY "Allow all adm_cycles" ON adm_cycles FOR ALL USING (true);
+CREATE POLICY "Allow all architecture_artifacts" ON architecture_artifacts FOR ALL USING (true);
+CREATE POLICY "Allow all architecture_domain_tags" ON architecture_domain_tags FOR ALL USING (true);
+CREATE POLICY "Allow all capability_map" ON capability_map FOR ALL USING (true);
+CREATE POLICY "Allow all architecture_principles" ON architecture_principles FOR ALL USING (true);
+CREATE POLICY "Allow all principle_compliance" ON principle_compliance FOR ALL USING (true);
+CREATE POLICY "Allow all parking_lot" ON parking_lot FOR ALL USING (true);
+CREATE POLICY "Allow all architecture_conflicts" ON architecture_conflicts FOR ALL USING (true);
+CREATE POLICY "Allow all architecture_states" ON architecture_states FOR ALL USING (true);
+CREATE POLICY "Allow all requirement_gap_links" ON requirement_gap_links FOR ALL USING (true);
 
-DO $$
-DECLARE tbl TEXT;
-BEGIN
-  FOR tbl IN SELECT unnest(ARRAY['architecture_domain_tags','principle_compliance']) LOOP
-    EXECUTE format('CREATE POLICY org_isolation ON %I FOR ALL USING (
-      artifact_id IN (SELECT id FROM architecture_artifacts WHERE org_id IN (
-        SELECT org_id FROM org_members WHERE user_id = auth.uid()))
-    )', tbl);
-  END LOOP;
-END $$;
-
-CREATE POLICY org_isolation ON requirement_gap_links FOR ALL USING (
-  requirement_artifact_id IN (SELECT id FROM architecture_artifacts WHERE org_id IN (
-    SELECT org_id FROM org_members WHERE user_id = auth.uid()))
-  OR gap_artifact_id IN (SELECT id FROM architecture_artifacts WHERE org_id IN (
-    SELECT org_id FROM org_members WHERE user_id = auth.uid()))
-);
-
--- Indexes
-CREATE INDEX idx_artifacts_org_status ON architecture_artifacts(org_id, lifecycle_status);
-CREATE INDEX idx_artifacts_pcf ON architecture_artifacts(org_id, pcf_category_id);
+-- Performance indexes
+CREATE INDEX idx_artifacts_user_status ON architecture_artifacts(user_id, lifecycle_status);
+CREATE INDEX idx_artifacts_pcf ON architecture_artifacts(user_id, pcf_category_id);
 CREATE INDEX idx_artifacts_source ON architecture_artifacts(source_module, source_entity_id);
 CREATE INDEX idx_tags_domain ON architecture_domain_tags(artifact_id, domain);
-CREATE INDEX idx_conflicts_org_status ON architecture_conflicts(org_id, resolution_status);
-CREATE INDEX idx_parking_org_status ON parking_lot(org_id, status);
-CREATE INDEX idx_capability_org ON capability_map(org_id, pcf_id);
-CREATE INDEX idx_adm_org ON adm_cycles(org_id, status);
+CREATE INDEX idx_conflicts_user_status ON architecture_conflicts(user_id, resolution_status);
+CREATE INDEX idx_parking_user_status ON parking_lot(user_id, status);
+CREATE INDEX idx_capability_user ON capability_map(user_id, pcf_id);
+CREATE INDEX idx_adm_user ON adm_cycles(user_id, status);

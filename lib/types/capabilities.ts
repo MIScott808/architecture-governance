@@ -1,6 +1,6 @@
 export interface CapabilityMapEntry {
   id: string;
-  orgId: string;
+  userId: string;
   pcfId: string;
   pcfName: string;
   capabilityName: string;
@@ -19,7 +19,7 @@ export interface CapabilityMapEntry {
 export function dbCapabilityToCapability(db: Record<string, unknown>): CapabilityMapEntry {
   return {
     id: db.id as string,
-    orgId: db.org_id as string,
+    userId: db.user_id as string,
     pcfId: db.pcf_id as string,
     pcfName: db.pcf_name as string,
     capabilityName: db.capability_name as string,

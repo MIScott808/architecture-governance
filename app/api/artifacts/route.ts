@@ -8,8 +8,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function GET(request: NextRequest) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   let query = supabase
     .from('architecture_artifacts')
     .select('*, architecture_domain_tags(*)')
-    .eq('org_id', orgId);
+    .eq('user_id', userId);
 
   if (sourceModule) query = query.eq('source_module', sourceModule);
   if (status) query = query.eq('lifecycle_status', status);
@@ -69,8 +69,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
   const { data: artifact, error } = await supabase
     .from('architecture_artifacts')
     .insert({
-      org_id: orgId,
+      user_id: userId,
       source_module: body.sourceModule,
       source_entity_type: body.sourceEntityType,
       source_entity_id: body.sourceEntityId,

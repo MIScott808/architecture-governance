@@ -6,8 +6,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 export async function GET() {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -19,7 +19,7 @@ export async function GET() {
   const { data, error } = await supabase
     .from('architecture_principles')
     .select('*')
-    .eq('org_id', orgId)
+    .eq('user_id', userId)
     .order('priority', { ascending: true });
 
   if (error) {
@@ -30,8 +30,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
   const { data, error } = await supabase
     .from('architecture_principles')
     .insert({
-      org_id: orgId,
+      user_id: userId,
       principle_name: body.principleName,
       rationale: body.rationale || null,
       implications: body.implications || null,

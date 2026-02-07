@@ -10,8 +10,8 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -24,7 +24,7 @@ export async function GET(
     .from('architecture_artifacts')
     .select('*, architecture_domain_tags(*), principle_compliance(*, architecture_principles(*))')
     .eq('id', params.id)
-    .eq('org_id', orgId)
+    .eq('user_id', userId)
     .single();
 
   if (error || !data) {
@@ -38,8 +38,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const { userId, orgId } = await auth();
-  if (!userId || !orgId) {
+  const { userId } = await auth();
+  if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -67,7 +67,7 @@ export async function PATCH(
     .from('architecture_artifacts')
     .update(updateFields)
     .eq('id', params.id)
-    .eq('org_id', orgId)
+    .eq('user_id', userId)
     .select()
     .single();
 
