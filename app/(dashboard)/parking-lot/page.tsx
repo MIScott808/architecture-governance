@@ -1,10 +1,17 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ParkingCircle, Plus, Loader2, Search } from 'lucide-react';
+import { ParkingCircle, Plus, Loader2, Search, Radar, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import type { ParkingLotItem, ParkingStatus } from '@/lib/types/parking-lot';
 import ParkedItemCard from '@/components/parking-lot/parked-item-card';
 import ParkFormModal from '@/components/parking-lot/park-form-modal';
+
+interface ScanSummary {
+  capabilityOverlaps: number;
+  crossDomainFlags: number;
+  parkingLotConflicts: number;
+  newConflictsCreated: number;
+}
 
 const STATUS_TABS: { value: ParkingStatus | ''; label: string }[] = [
   { value: '', label: 'All' },
@@ -29,6 +36,22 @@ export default function ParkingLotPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<ScanSummary | null>(null);
+
+  async function handleScan() {
+    setScanning(true);
+    setScanResult(null);
+    try {
+      const res = await fetch('/api/conflicts/scan', { method: 'POST' });
+      const data = await res.json();
+      setScanResult(data.summary || null);
+    } catch {
+      // silent
+    } finally {
+      setScanning(false);
+    }
+  }
 
   const fetchItems = useCallback(async () => {
     try {
@@ -62,14 +85,62 @@ export default function ParkingLotPage() {
             {items.length > 0 && <span className="ml-2 text-slate-400">({items.length} items)</span>}
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-mana-blue to-mana-blue-bright text-white rounded-lg text-sm font-medium hover:shadow-md transition-all"
-        >
-          <Plus className="w-4 h-4" />
-          Park Item
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleScan}
+            disabled={scanning}
+            className="flex items-center gap-2 px-4 py-2 border border-slate-200 text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-all disabled:opacity-50"
+          >
+            {scanning ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Radar className="w-4 h-4" />
+            )}
+            {scanning ? 'Scanning...' : 'Scan Conflicts'}
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-mana-blue to-mana-blue-bright text-white rounded-lg text-sm font-medium hover:shadow-md transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Park Item
+          </button>
+        </div>
       </div>
+
+      {/* Scan Results Banner */}
+      {scanResult && (
+        <div className={`mb-4 p-4 rounded-xl border ${
+          scanResult.newConflictsCreated > 0
+            ? 'bg-orange-50 border-orange-200'
+            : 'bg-emerald-50 border-emerald-200'
+        }`}>
+          <div className="flex items-center gap-3">
+            {scanResult.newConflictsCreated > 0 ? (
+              <AlertTriangle className="w-5 h-5 text-orange-500 flex-shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500 flex-shrink-0" />
+            )}
+            <div>
+              <p className="text-sm font-medium text-slate-700">
+                Conflict scan complete
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Found {scanResult.capabilityOverlaps} capability overlap{scanResult.capabilityOverlaps !== 1 ? 's' : ''},{' '}
+                {scanResult.crossDomainFlags} cross-domain flag{scanResult.crossDomainFlags !== 1 ? 's' : ''},{' '}
+                {scanResult.parkingLotConflicts} parking lot conflict{scanResult.parkingLotConflicts !== 1 ? 's' : ''}.{' '}
+                <strong>{scanResult.newConflictsCreated} new conflict{scanResult.newConflictsCreated !== 1 ? 's' : ''} created.</strong>
+              </p>
+            </div>
+            <button
+              onClick={() => setScanResult(null)}
+              className="ml-auto text-slate-400 hover:text-slate-600 text-xs"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 border-b border-slate-200">

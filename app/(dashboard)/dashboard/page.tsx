@@ -13,6 +13,7 @@ import CapabilityHeatmap from '@/components/dashboard/capability-heatmap';
 import ConflictChart from '@/components/dashboard/conflict-chart';
 import ComplianceScorecard from '@/components/dashboard/compliance-scorecard';
 import ADMPhaseTracker from '@/components/dashboard/adm-phase-tracker';
+import ExportPdfButton from '@/components/dashboard/export-pdf-button';
 
 interface DashboardStats {
   artifactCount: number;
@@ -137,13 +138,16 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">
-          Architecture Runway Health
-        </h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Cross-cutting governance overview across the Mana Platform
-        </p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Architecture Runway Health
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            Cross-cutting governance overview across the Mana Platform
+          </p>
+        </div>
+        <ExportPdfButton />
       </div>
 
       {/* Summary Cards */}

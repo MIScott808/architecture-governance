@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, ChevronRight, Clock, CalendarCheck } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Clock, CalendarCheck, GitCompare, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { ADM_PHASE_LABELS, ADM_PHASE_ORDER } from '@/lib/types/adm';
 import type { ADMCycle } from '@/lib/types/adm';
 import ADMPhaseTracker from '@/components/dashboard/adm-phase-tracker';
@@ -13,6 +13,18 @@ export default function ADMCycleDetailPage() {
   const [cycle, setCycle] = useState<ADMCycle | null>(null);
   const [loading, setLoading] = useState(true);
   const [advancing, setAdvancing] = useState(false);
+  const [comparison, setComparison] = useState<{
+    baseline: { capturedAt: string } | null;
+    target: { capturedAt: string } | null;
+    deltas: Array<{
+      pcfId: string;
+      capabilityName: string;
+      baselineScore: number | null;
+      targetScore: number | null;
+      delta: number;
+    }>;
+  } | null>(null);
+  const [compDomain, setCompDomain] = useState('business');
 
   const fetchCycle = useCallback(async () => {
     try {
@@ -27,6 +39,18 @@ export default function ADMCycleDetailPage() {
   }, [params.id]);
 
   useEffect(() => { fetchCycle(); }, [fetchCycle]);
+
+  const fetchComparison = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/adm-cycles/${params.id}/compare?domain=${compDomain}`);
+      const data = await res.json();
+      setComparison(data.comparison || null);
+    } catch {
+      // silent
+    }
+  }, [params.id, compDomain]);
+
+  useEffect(() => { fetchComparison(); }, [fetchComparison]);
 
   async function handleAdvance() {
     if (!cycle || cycle.status !== 'in_progress') return;
@@ -170,6 +194,77 @@ export default function ADMCycleDetailPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+      {/* Architecture Evolution Comparison */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6 mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <GitCompare className="w-4 h-4 text-mana-blue" />
+            <h2 className="text-sm font-semibold text-slate-700">Architecture Evolution</h2>
+          </div>
+          <select
+            value={compDomain}
+            onChange={(e) => setCompDomain(e.target.value)}
+            className="px-2 py-1 border border-slate-200 rounded text-xs text-slate-600"
+          >
+            <option value="business">Business</option>
+            <option value="information">Information</option>
+            <option value="technology">Technology</option>
+          </select>
+        </div>
+
+        {!comparison || comparison.deltas.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-8">
+            Advance through phases to capture architecture state snapshots for comparison
+          </p>
+        ) : (
+          <div>
+            <div className="flex items-center gap-4 text-xs text-slate-400 mb-4">
+              {comparison.baseline && (
+                <span>Baseline: {new Date(comparison.baseline.capturedAt).toLocaleDateString()}</span>
+              )}
+              {comparison.target && (
+                <span>Latest: {new Date(comparison.target.capturedAt).toLocaleDateString()}</span>
+              )}
+            </div>
+            <div className="space-y-2">
+              {comparison.deltas.map((d) => (
+                <div
+                  key={d.pcfId}
+                  className="flex items-center justify-between py-2 border-b border-slate-50 last:border-0"
+                >
+                  <div className="flex items-center gap-3">
+                    {d.delta > 0 ? (
+                      <TrendingUp className="w-4 h-4 text-mana-teal" />
+                    ) : d.delta < 0 ? (
+                      <TrendingDown className="w-4 h-4 text-mana-coral" />
+                    ) : (
+                      <Minus className="w-4 h-4 text-slate-300" />
+                    )}
+                    <span className="text-xs font-mono text-slate-400">{d.pcfId}</span>
+                    <span className="text-sm text-slate-700">{d.capabilityName}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-slate-400">
+                      {d.baselineScore ?? '—'} → {d.targetScore ?? '—'}
+                    </span>
+                    <span
+                      className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                        d.delta > 0
+                          ? 'bg-emerald-50 text-emerald-600'
+                          : d.delta < 0
+                            ? 'bg-red-50 text-red-600'
+                            : 'bg-slate-100 text-slate-400'
+                      }`}
+                    >
+                      {d.delta > 0 ? '+' : ''}{d.delta}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

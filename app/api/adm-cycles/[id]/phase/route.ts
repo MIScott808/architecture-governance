@@ -52,6 +52,15 @@ export async function PATCH(
 
   // Check if this is the last phase
   if (currentIndex >= ADM_PHASE_ORDER.length - 1) {
+    // Snapshot final phase state
+    await snapshotArchitectureState(
+      supabase,
+      userId,
+      params.id,
+      cycle.current_phase as ADMPhase,
+      currentIndex
+    );
+
     // Complete the cycle
     const { data: updated, error: updateError } = await supabase
       .from('adm_cycles')
@@ -71,6 +80,15 @@ export async function PATCH(
 
     return NextResponse.json({ cycle: dbCycleToAdmCycle(updated), completed: true });
   }
+
+  // Snapshot architecture state for the phase we're leaving
+  await snapshotArchitectureState(
+    supabase,
+    userId,
+    params.id,
+    cycle.current_phase as ADMPhase,
+    currentIndex
+  );
 
   // Advance to next phase
   const nextPhase = ADM_PHASE_ORDER[currentIndex + 1];
@@ -92,4 +110,70 @@ export async function PATCH(
   }
 
   return NextResponse.json({ cycle: dbCycleToAdmCycle(updated), completed: false });
+}
+
+// Determine domain for each ADM phase
+const PHASE_DOMAIN: Record<string, string> = {
+  preliminary: 'business',
+  architecture_vision: 'business',
+  business_architecture: 'business',
+  information_systems: 'information',
+  technology_architecture: 'technology',
+  opportunities_solutions: 'business',
+  migration_planning: 'technology',
+  implementation_governance: 'technology',
+  change_management: 'business',
+};
+
+async function snapshotArchitectureState(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  userId: string,
+  cycleId: string,
+  phase: ADMPhase,
+  phaseIndex: number
+) {
+  try {
+    const domain = PHASE_DOMAIN[phase] || 'business';
+
+    // Grab current capability scores for this domain's relevant capabilities
+    const { data: capabilities } = await supabase
+      .from('capability_map')
+      .select('pcf_id, capability_name, maturity_score, maturity_current')
+      .eq('user_id', userId);
+
+    const capabilityScores: Record<string, { name: string; score: number; maturity: string | null }> = {};
+    (capabilities || []).forEach((c: Record<string, unknown>) => {
+      capabilityScores[c.pcf_id as string] = {
+        name: c.capability_name as string,
+        score: (c.maturity_score as number) ?? 0,
+        maturity: c.maturity_current as string | null,
+      };
+    });
+
+    // Count active artifacts and their domains
+    const { data: artifacts } = await supabase
+      .from('architecture_artifacts')
+      .select('id, artifact_name, pcf_category_id, lifecycle_status')
+      .eq('user_id', userId)
+      .eq('lifecycle_status', 'active');
+
+    const stateType = phaseIndex === 0 ? 'baseline' : 'transitional';
+
+    await supabase.from('architecture_states').insert({
+      user_id: userId,
+      adm_cycle_id: cycleId,
+      state_type: stateType,
+      domain,
+      capability_scores: capabilityScores,
+      architecture_elements: {
+        activeArtifactCount: (artifacts || []).length,
+        phase,
+        capturedBy: 'phase_advance',
+      },
+      created_by: userId,
+    });
+  } catch {
+    // Non-blocking — don't fail the phase advance if snapshot fails
+  }
 }

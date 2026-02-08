@@ -8,6 +8,7 @@ import type { ArchitectureArtifact } from '@/lib/types/artifacts';
 import DomainBadge from '@/components/shared/domain-badge';
 import ValidationPanel from '@/components/artifacts/validation-panel';
 import ComplianceAssessor from '@/components/artifacts/compliance-assessor';
+import RequirementGapLinks from '@/components/artifacts/requirement-gap-links';
 
 const SOURCE_LABELS: Record<string, string> = {
   strategic_compass: 'Strategic Compass',
@@ -130,6 +131,12 @@ export default function ArtifactDetailPage() {
 
           {/* Compliance Assessment */}
           <ComplianceAssessor artifactId={artifact.id} onUpdated={fetchArtifact} />
+
+          {/* Requirement-Gap Links */}
+          <RequirementGapLinks
+            artifactId={artifact.id}
+            artifactType={artifact.sourceEntityType}
+          />
         </div>
 
         {/* Sidebar */}
