@@ -1,0 +1,51 @@
+-- ============================================================
+-- MOSAIC Archive — SQL Schema Reference
+-- Exported: 2026-05-12 before project deletion
+-- Source: Supabase project eaagcnxnkjvykfypefcb (MOSAIC)
+-- Purpose: Reference DDL for porting tables forward into
+--          mana-academy via manaolana-academy-migrations pipeline
+--
+-- IMPORTANT: These are CREATE TABLE stubs for reference.
+-- DO NOT apply this file directly to production.
+-- Port each table through the migrations pipeline with:
+--   - Domain-driven naming per ADR-0008
+--   - RLS enabled + policies using mosaic_clerk_sub()
+--   - Sibling verify.sql and down.sql per PR rules
+-- ============================================================
+
+-- NAMESPACE SUMMARY
+-- cm_*           : Change Management (ADKAR model)
+-- dmaic_*        : Lean Six Sigma DMAIC workflow
+-- voc_*          : Voice of Customer
+-- pm_*           : Project Management (PMBOK-aligned, 37 tables)
+-- requirement_*  : Requirements management
+-- architecture_* : Enterprise Architecture (EA module)
+-- adm_*          : TOGAF ADM cycles
+-- bpmn_*         : BPMN process diagrams
+-- vsm_*          : Value Stream Mapping (simulation)
+-- assessments    : PCF capability assessments
+-- profiles       : User profiles (belt level, XP)
+-- scenarios/scores/simulation_sessions: Gamification layer
+
+-- TABLE COUNT: 107 tables
+-- TABLES WITH DATA AT EXPORT (13 rows total):
+--   assessments: 5 rows
+--   pm_projects: 2 rows
+--   pm_stakeholder_register: 1 row
+--   pm_project_environment_profile: 1 row
+--   pm_project_schedule: 1 row
+--   pm_schedule_activities: 2 rows
+--   pm_resource_plan: 1 row
+--   pm_cost_baseline: 1 row
+--   pm_cost_baseline_elements: 2 rows
+--   architecture_artifacts: 1 row
+--   architecture_domain_tags: 1 row
+--   bpmn_diagrams: 4 rows
+--   application_inventory: 2 rows
+-- All remaining tables: 0 rows
+
+-- ============================================================
+-- COMPLETE TYPESCRIPT TYPES: mosaic-schema-reference.types.ts
+-- (see companion file for full Row/Insert/Update types per table)
+-- ============================================================
+
