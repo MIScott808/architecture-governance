@@ -196,6 +196,49 @@ ORDER BY 1, 2;
 The same applies to policies, grants, triggers, and scheduled jobs: scope by
 exclusion, not by assuming `public`.
 
+### Decision 4 — Standing quarterly-audit item: enumerate cron jobs and their failure counts
+
+Every quarterly audit must enumerate the scheduled jobs on production and
+report each one's failure count and last successful run.
+
+This is the same class of gap as Decision 3, in a different dimension. The
+audit rule above catches things that exist but were never looked at. This one
+catches things that were looked at once, then broke silently.
+
+Concrete case: the `mosaic_sso_nonces_cleanup` job on `mana-academy` targeted
+`public.mosaic_sso_nonces`. ADR-0008 renamed that table to `public.sso_nonces`
+on 2026-05-12 and the job was never repointed. It failed on every hourly run
+for fifteen weeks — **2,270 recorded failures** — and nothing surfaced it.
+pg_cron writes failures to `cron.job_run_details` and nowhere else: no log
+line anyone reads, no alert, no degraded behaviour a user would notice. It was
+found only because an unrelated promotion happened to list `cron.job`.
+
+The data consequence here was nil — the table was empty and nothing writes to
+it — but that is luck, not design. The same failure mode on a job that
+actually moves data would have been equally invisible.
+
+```sql
+-- Quarterly: every job, its schedule, and its health.
+SELECT j.jobid, j.jobname, j.schedule, j.active,
+       COUNT(*) FILTER (WHERE d.status = 'failed')    AS failed_runs,
+       COUNT(*) FILTER (WHERE d.status = 'succeeded') AS succeeded_runs,
+       MAX(d.start_time) FILTER (WHERE d.status = 'succeeded') AS last_success,
+       MAX(d.start_time) FILTER (WHERE d.status = 'failed')    AS last_failure
+FROM cron.job j
+LEFT JOIN cron.job_run_details d ON d.jobid = j.jobid
+GROUP BY j.jobid, j.jobname, j.schedule, j.active
+ORDER BY failed_runs DESC;
+```
+
+Any job whose `last_failure` is more recent than its `last_success` is a live
+outage regardless of how long it has been that way. Any job with a non-zero
+`failed_runs` and no recent success is the case above.
+
+A renaming migration must also check for references to the old name in
+`cron.job.command`. Renames are caught by the SQL layer everywhere else — a
+query against a missing table is a hard error someone sees. Inside a cron
+command it is a hard error nobody sees.
+
 ### Consequences
 
 - The `manaolana-academy-migrations` README namespace table needs the same
