@@ -35,6 +35,8 @@ Seven `mosaic_*`-prefixed tables exist in production, all confirmed empty (0 row
 | `ba_*` | Business Analysis |
 | `yb_*` | Yellow Belt lab-specific tables |
 | `iiba_prep_*` | IIBA certification preparation |
+| `cns_*` | Consulting Network System — contracts, referrals, roster, compensation |
+| `ea_*` | Enterprise Architecture substrate — elements, relationships, evidence, assertions |
 
 ### Cross-cutting namespaces (Tier 1)
 
@@ -81,3 +83,167 @@ Renames are executed by migration `001_rename_mosaic_foundational_tables.sql` in
 ### Risks
 
 - If production tables are not actually empty at migration time, the rename could disrupt active queries. The PR template requires production audit status (row counts) to mitigate this.
+
+
+---
+
+## Amendment — 2026-08-16
+
+**Status:** Accepted
+**Date:** 2026-08-16
+**Deciders:** Scott Nakagawa (MI Founder / Curriculum Architect)
+
+### Context
+
+Three namespaces reached production without being recorded here. All three were
+created out-of-band on `academy-staging` and promoted to `mana-academy` during
+the 2026-08-16 environment-topology restoration. This amendment records them
+and adds one standing rule that came out of that work.
+
+### Decision 1 — `cns_*` and `ea_*` are approved Tier 2 namespaces
+
+Added to the Tier 2 table above.
+
+- **`cns_*`** — Consulting Network System. Eight tables covering contracts,
+  referral sources and referrals, the practitioner roster and levels,
+  assignments, goals, and the admin roster. Access is gated by
+  `cns_is_admin()`, an email-matched `SECURITY DEFINER` function checking
+  membership in `cns_admins`.
+- **`ea_*`** — Enterprise Architecture substrate. Six tables covering the
+  element and relationship type catalogs, elements, relationships, and the
+  evidence and assertion ledgers. Access is org-scoped by `ea_user_org_ids()`,
+  which reads the `org_id` JWT claim. `ea_evidence` and `ea_assertions` are
+  append-only-forever, enforced by `BEFORE UPDATE OR DELETE` trigger guards
+  rather than convention.
+
+Both use the discipline-prefix pattern the original decision establishes. No
+change to the reasoning; they are simply new disciplines.
+
+### Decision 2 — `sprint` is a sanctioned schema-based exception
+
+The sprint delivery system (initiatives, sprints, work items, the AI review
+queue, team roster, activity and scan logs — 8 tables) lives in a dedicated
+Postgres schema named `sprint`, **not** behind a `sprint_*` prefix in `public`.
+
+This is a deliberate exception to the prefix convention, sanctioned here rather
+than treated as drift.
+
+Rationale:
+
+1. **It is a distinct system, not a discipline within the platform.** The
+   `*_` prefixes above namespace practitioner-data families that share the
+   Academy's tenancy and access model. The sprint system is MI's own internal
+   delivery tooling with a separate front end and its own access model. A
+   schema boundary expresses that more honestly than a prefix.
+2. **The prefix convention exists to prevent collision ambiguity inside a
+   shared namespace.** A separate schema solves the same problem more
+   strongly — `sprint.work_items` cannot collide with anything in `public`.
+3. **Minimizing app breakage.** The application already addresses these tables
+   as `sprint.*`. Flattening to `public.sprint_*` at promotion time would have
+   required rewriting every query for no architectural gain.
+
+Constraints on the exception, so it does not become a precedent for sprawl:
+
+- A new schema requires an ADR amendment; it is not a default option. Prefixes
+  in `public` remain the norm for anything that is a discipline within the
+  platform.
+- A non-`public` schema must be explicitly exposed in the Supabase API settings
+  to be reachable by PostgREST. That exposure is part of the promotion
+  checklist, not an afterthought.
+- The schema carries the same RLS floor as everything else: no anon writes
+  beyond an explicitly justified capability, and no destructive grants
+  (`TRUNCATE`, `REFERENCES`, `TRIGGER`) to `anon` or `authenticated` on any
+  table.
+
+The `sprint` schema's one sanctioned anon capability is `INSERT` on
+`sprint.ai_review_queue`, constrained by `WITH CHECK (review_status =
+'Pending')`. This is the assertion-ledger pattern: external agents propose,
+humans dispose. It mirrors the `cns_intake` anon-insert precedent — a public
+write path that can only ever create unreviewed rows.
+
+### Decision 3 — Standing rule: schema-scoped audits must enumerate all schemas
+
+Any audit that asks "what exists in this database" or "what differs between
+these databases" **must enumerate every non-system schema**, not just `public`.
+
+This rule exists because it was broken. During the 2026-08-16 restoration, an
+audit of `academy-staging` for production-use data compared only the `public`
+schema and reported that nothing beyond `cns_*` and `ea_*` needed promoting.
+The entire `sprint` schema — 8 tables, 38 live work items, an active
+`pg_cron` job, and a Vercel app writing to it several times a day — was
+invisible to that query and was missed. It surfaced later only because API
+traffic logs showed writes to table names that the schema comparison had never
+listed.
+
+Concretely, audit queries must filter by excluding known system schemas rather
+than by selecting `public`:
+
+```sql
+-- Wrong: silently scopes the whole audit to one schema.
+SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';
+
+-- Right: enumerates everything, excluding only system schemas.
+SELECT n.nspname AS schema, c.relname AS table_name
+FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE c.relkind = 'r'
+  AND n.nspname NOT IN (
+    'pg_catalog','information_schema','auth','storage','realtime','vault',
+    'extensions','graphql','graphql_public','net','supabase_migrations',
+    'cron','pgbouncer','_analytics','_realtime','pgsodium','pgsodium_masks')
+ORDER BY 1, 2;
+```
+
+The same applies to policies, grants, triggers, and scheduled jobs: scope by
+exclusion, not by assuming `public`.
+
+### Decision 4 — Standing quarterly-audit item: enumerate cron jobs and their failure counts
+
+Every quarterly audit must enumerate the scheduled jobs on production and
+report each one's failure count and last successful run.
+
+This is the same class of gap as Decision 3, in a different dimension. The
+audit rule above catches things that exist but were never looked at. This one
+catches things that were looked at once, then broke silently.
+
+Concrete case: the `mosaic_sso_nonces_cleanup` job on `mana-academy` targeted
+`public.mosaic_sso_nonces`. ADR-0008 renamed that table to `public.sso_nonces`
+on 2026-05-12 and the job was never repointed. It failed on every hourly run
+for fifteen weeks — **2,270 recorded failures** — and nothing surfaced it.
+pg_cron writes failures to `cron.job_run_details` and nowhere else: no log
+line anyone reads, no alert, no degraded behaviour a user would notice. It was
+found only because an unrelated promotion happened to list `cron.job`.
+
+The data consequence here was nil — the table was empty and nothing writes to
+it — but that is luck, not design. The same failure mode on a job that
+actually moves data would have been equally invisible.
+
+```sql
+-- Quarterly: every job, its schedule, and its health.
+SELECT j.jobid, j.jobname, j.schedule, j.active,
+       COUNT(*) FILTER (WHERE d.status = 'failed')    AS failed_runs,
+       COUNT(*) FILTER (WHERE d.status = 'succeeded') AS succeeded_runs,
+       MAX(d.start_time) FILTER (WHERE d.status = 'succeeded') AS last_success,
+       MAX(d.start_time) FILTER (WHERE d.status = 'failed')    AS last_failure
+FROM cron.job j
+LEFT JOIN cron.job_run_details d ON d.jobid = j.jobid
+GROUP BY j.jobid, j.jobname, j.schedule, j.active
+ORDER BY failed_runs DESC;
+```
+
+Any job whose `last_failure` is more recent than its `last_success` is a live
+outage regardless of how long it has been that way. Any job with a non-zero
+`failed_runs` and no recent success is the case above.
+
+A renaming migration must also check for references to the old name in
+`cron.job.command`. Renames are caught by the SQL layer everywhere else — a
+query against a missing table is a hard error someone sees. Inside a cron
+command it is a hard error nobody sees.
+
+### Consequences
+
+- The `manaolana-academy-migrations` README namespace table needs the same
+  three entries. That is a follow-up PR in that repo.
+- Future non-`public` schemas are permitted but require an amendment here,
+  keeping the exception explicit and countable.
+- Audit tooling and prompts that hardcode `table_schema = 'public'` should be
+  corrected as they are encountered.
